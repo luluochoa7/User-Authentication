@@ -1,50 +1,26 @@
-// backend/routes/api/index.js
-const router = require('express').Router();
-const sessionRouter = require('./session.js');
-const usersRouter = require('./users.js');
+import { createStore, combineReducers, applyMiddleware, compose } from "redux";
+import thunk from "redux-thunk";
+import sessionReducer from './session'; // Import the sessionReducer
 
-// Connecting routes for sessions and users
-router.use('/session', sessionRouter);
-router.use('/users', usersRouter);
 
-// Test route
-// router.post('/test', (req, res) => {
-//   res.json({ requestBody: req.body });
-// });
+const rootReducer = combineReducers({
+  // ... Other reducers you might have
+  session: sessionReducer, // Set sessionReducer as the 'session' key in combineReducers
+});
 
-// GET /api/set-token-cookie
-// const asyncHandler = require('express-async-handler');
-// const { setTokenCookie } = require('../../utils/auth.js');
-// const { User } = require('../../db/models');
+let enhancer;
 
-// router.get('/set-token-cookie', asyncHandler(async (_req, res) => {
-//   const user = await User.findOne({
-//     where: {
-//       username: 'Demo-lition'
-//     }
-//   });
-//   setTokenCookie(res, user);
-//   return res.json({ user });
-// }));
+if (process.env.NODE_ENV === "production") {
+  enhancer = applyMiddleware(thunk);
+} else {
+  const logger = require("redux-logger").default;
+  const composeEnhancers =
+    window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ || compose;
+  enhancer = composeEnhancers(applyMiddleware(thunk, logger));
+}
 
-// GET /api/restore-user
-// const { restoreUser } = require('../../utils/auth.js');
-// router.get(
-//   '/restore-user',
-//   restoreUser,
-//   (req, res) => {
-//     return res.json(req.user);
-//   }
-// );
+const configureStore = (preloadedState) => {
+  return createStore(rootReducer, preloadedState, enhancer);
+};
 
-// GET /api/require-auth
-// const { requireAuth } = require('../../utils/auth.js');
-// router.get(
-//   '/require-auth',
-//   requireAuth,
-//   (req, res) => {
-//     return res.json(req.user);
-//   }
-// );
-
-module.exports = router;
+export default configureStore;

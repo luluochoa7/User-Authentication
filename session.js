@@ -1,79 +1,98 @@
-// backend/routes/api/session.js
-const express = require('express');
-const asyncHandler = require('express-async-handler');
-const { check } = require('express-validator');
-const { handleValidationErrors } = require('../../utils/validation');
-const { setTokenCookie, restoreUser } = require('../../utils/auth');
-const { User } = require('../../db/models');
+// frontend/src/store/session.js
+import { csrfFetch } from './csrf';
 
-const router = express.Router();
+const SET_USER = 'session/setUser';
+const REMOVE_USER = 'session/removeUser';
 
-// GET /api/session/restore
-router.get(
-  '/restore',
-  restoreUser,
-  (req, res) => {
-    return res.json(req.user);
+const setUser = (user) => {
+  return {
+    type: SET_USER,
+    payload: user,
+  };
+};
+
+const removeUser = () => {
+  return {
+    type: REMOVE_USER,
+  };
+};
+
+export const login = (user) => async (dispatch) => {
+  const { credential, password } = user;
+  const response = await csrfFetch('/api/session', {
+    method: 'POST',
+    body: JSON.stringify({
+      credential,
+      password,
+    }),
+  });
+
+  if (response.ok) {
+    const data = await response.json();
+    dispatch(setUser(data.user));
+  } else {
+    // Handle errors or additional logic if needed
   }
-);
 
-// POST /api/session
-const validateLogin = [
-  check('credential')
-    .exists({ checkFalsy: true })
-    .notEmpty()
-    .withMessage('Please provide a valid email or username.'),
-  check('password')
-    .exists({ checkFalsy: true })
-    .withMessage('Please provide a password.'),
-  handleValidationErrors
-];
+  return response;
+};
 
-router.post(
-  '/',
-  validateLogin,
-  asyncHandler(async (req, res, next) => {
-    const { credential, password } = req.body;
+export const restoreUser = () => async dispatch => {
+  const response = await csrfFetch('/api/session');
+  const data = await response.json();
 
-    const user = await User.login({ credential, password });
-
-    if (!user) {
-      const err = new Error('Login failed');
-      err.status = 401;
-      err.title = 'Login failed';
-      err.errors = ['The provided credentials were invalid.'];
-      return next(err);
-    }
-
-    await setTokenCookie(res, user);
-
-    return res.json({
-      user
-    });
-  })
-);
-
-// DELETE /api/session
-router.delete(
-  '/',
-  (_req, res) => {
-    res.clearCookie('token');
-    return res.json({ message: 'success' });
+  if (data.user) {
+    dispatch(setUser(data.user));
   }
-);
 
-// GET /api/session
-router.get(
-  '/',
-  restoreUser,
-  (req, res) => {
-    const { user } = req;
-    if (user) {
-      return res.json({
-        user: user.toSafeObject()
-      });
-    } else return res.json({});
+  return response;
+};
+
+export const signup = (user) => async (dispatch) => {
+  const { username, email, password } = user;
+  const response = await csrfFetch("/api/users", {
+    method: "POST",
+    body: JSON.stringify({
+      username,
+      email,
+      password,
+    }),
+  });
+
+  if (response.ok) {
+    const data = await response.json();
+    dispatch(setUser(data.user));
+  } else {
+    // Handle errors or additional logic if needed
   }
-);
 
-module.exports = router;
+  return response;
+};
+
+export const logout = () => async (dispatch) => {
+  const response = await csrfFetch('/api/session', {
+    method: 'DELETE',
+  });
+  dispatch(removeUser());
+  return response;
+};
+
+const initialState = { user: null };
+
+const sessionReducer = (state = initialState, action) => {
+  let newState;
+  switch (action.type) {
+    case SET_USER:
+      newState = Object.assign({}, state);
+      newState.user = action.payload;
+      return newState;
+    case REMOVE_USER:
+      newState = Object.assign({}, state);
+      newState.user = null;
+      return newState;
+    default:
+      return state;
+  }
+};
+
+export default sessionReducer;
